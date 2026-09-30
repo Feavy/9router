@@ -102,6 +102,9 @@ export const KIMI_CONFIG = {
 // Back-compat alias for any remaining KIMI_CODING_CONFIG imports
 export const KIMI_CODING_CONFIG = KIMI_CONFIG;
 
+// ZCode (Z.ai) OAuth Configuration (Authorization Code Flow, custom-scheme redirect)
+export const ZCODE_CONFIG = { ...PROVIDER_OAUTH["zcode"] };
+
 // KiloCode OAuth Configuration (Custom Device Auth Flow)
 export const KILOCODE_CONFIG = { ...PROVIDER_OAUTH["kilocode"] };
 
