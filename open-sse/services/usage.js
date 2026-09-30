@@ -21,6 +21,7 @@ import { getZedUsage } from "./usage/zed.js";
 import { getXiaomiMimoUsage } from "./usage/xiaomi-mimo.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
 import { getGlmUsage } from "./usage/glm.js";
+import { getZcodeUsage } from "./usage/zcode.js";
 import { getCommandCodeUsage } from "./usage/commandcode.js";
 import {
   getIflowUsage,
@@ -48,6 +49,8 @@ const USAGE_HANDLERS = {
   ollama: (c) => getOllamaUsage(c.apiKey, c.providerSpecificData, c.proxyOptions),
   glm: (c) => getGlmUsage(c.apiKey, c.provider, c.proxyOptions),
   "glm-cn": (c) => getGlmUsage(c.apiKey, c.provider, c.proxyOptions),
+  // zcode OAuth connections store the coding-plan key on accessToken (no apiKey)
+  zcode: (c) => getZcodeUsage(c.apiKey || c.accessToken, c.proxyOptions),
   minimax: (c) => getMiniMaxUsage(c.apiKey, c.provider, c.proxyOptions),
   "minimax-cn": (c) => getMiniMaxUsage(c.apiKey, c.provider, c.proxyOptions),
   "vercel-ai-gateway": (c) => getVercelAiGatewayUsage(c.apiKey, c.proxyOptions),

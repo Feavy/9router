@@ -173,6 +173,19 @@ export const PROVIDER_CAPABILITIES = {
   "opencode-go": {
     "glm-5.3-flash": { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
   },
+  // ZCode (Z.ai OAuth) uses the ZCode plan's canonical capitalized model ids —
+  // the case-insensitive *glm-* patterns already cover the text models, so this
+  // block only pins the vision variants + the GLM-5.2 1M-window override.
+  "zcode": {
+    "GLM-5.3-Flash":             { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 },
+    "GLM-5V-Turbo":              { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 200000, maxOutput: 128000 },
+    "GLM-5.2":                   { reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+    "GLM-4.6V":                  { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 128000, maxOutput: 32768 },
+    "GLM-4.6V-Flash":            { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 128000, maxOutput: 32768 },
+    "GLM-4.6V-FlashX":           { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 128000, maxOutput: 32768 },
+    "GLM-4.1V-Thinking-FlashX":  { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 64000, maxOutput: 16384 },
+    "GLM-4.1V-Thinking-Flash":   { vision: true, videoInput: true, reasoning: true, thinkingFormat: "zai", contextWindow: 64000, maxOutput: 16384 },
+  },
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,

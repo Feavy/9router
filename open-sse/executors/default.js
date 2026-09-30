@@ -43,6 +43,11 @@ const HEADER_HOOKS = {
   kimiHeaders: (h, c) => Object.assign(h, buildKimiHeaders(c?.providerSpecificData?.deviceId)),
   clineHeaders: (h, c) => Object.assign(h, buildClineHeaders(c.apiKey || c.accessToken)),
   kilocodeOrg: (h, c) => { if (c.providerSpecificData?.orgId) h["X-Kilocode-OrganizationID"] = c.providerSpecificData.orgId; },
+  // ZCode platform gateway reads x-api-key OR Bearer — official CLI sends both.
+  zcodeHeaders: (h, c) => {
+    const token = c.apiKey || c.accessToken;
+    if (token) h["Authorization"] = `Bearer ${token}`;
+  },
 };
 
 // Config-driven OAuth refresh grants — derived from registry oauth.refresh.

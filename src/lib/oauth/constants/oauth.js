@@ -201,6 +201,12 @@ export const WINDSURF_CONFIG = {
   oauthTimeoutMs: 600_000,
 };
 
+// ZCode (Z.ai) OAuth — CLI polling flow (NOT PKCE): init mints a one-off poll
+// token, the browser opens the server-generated authorize_url, poll/ready
+// returns the tokens. The Z.AI OAuth token is then exchanged for a platform
+// business JWT and finally a long-lived coding-plan API key (no refresh grant).
+export const ZCODE_CONFIG = { ...PROVIDER_OAUTH["zcode"] };
+
 // Zed hosted LLM aggregator — RSA keypair native-app auth (NOT OAuth).
 // Client generates ephemeral RSA-2048 keypair; user signs in at zed.dev/native_app_signin;
 // Zed redirects to local callback with access_token RSA-encrypted against our public key.
@@ -241,5 +247,6 @@ export const PROVIDERS = {
   GROK_CLI: "grok-cli",
   TRAE: "trae",
   WINDSURF: "windsurf",
+  ZCODE: "zcode",
   ZED: "zed",
 };

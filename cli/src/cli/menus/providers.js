@@ -123,6 +123,10 @@ const PROVIDER_MODELS = {
   kimi: [
     { id: "kimi-latest" },
   ],
+  zcode: [
+    { id: "GLM-5.3" },
+    { id: "GLM-4.7" },
+  ],
   minimax: [
     { id: "MiniMax-M2.1" },
   ],
@@ -138,6 +142,7 @@ const OAUTH_PROVIDERS = {
   iflow: { id: "iflow", alias: "if", name: "iFlow AI" },
   qwen: { id: "qwen", alias: "qw", name: "Qwen Code" },
   kiro: { id: "kiro", alias: "kr", name: "Kiro AI" },
+  zcode: { id: "zcode", alias: "zc", name: "ZCode" },
 };
 
 const APIKEY_PROVIDERS = {
@@ -399,7 +404,7 @@ async function showConnectionActions(connection, providerId, breadcrumb = []) {
  * @param {string} authType - "oauth" or "apikey"
  */
 // Providers that use Device Code Flow (terminal-based polling)
-const DEVICE_CODE_PROVIDERS = ["github", "qwen", "kiro"];
+const DEVICE_CODE_PROVIDERS = ["github", "qwen", "kiro", "zcode"];
 
 /**
  * Handle adding new connection - auto-detect flow type

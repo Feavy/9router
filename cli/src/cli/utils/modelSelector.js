@@ -4,7 +4,7 @@ const { clearScreen } = require("./display");
 
 // Provider alias order: OAuth first, then Free, then API Key
 const PROVIDER_ALIAS_ORDER = [
-  "cc", "ag", "cx", "if", "qw", "gc", "gh", "kr", "oc",
+  "cc", "ag", "cx", "if", "qw", "gc", "gh", "kr", "oc", "zc",
   "openrouter", "glm", "kimi", "minimax", "openai", "anthropic", "gemini"
 ];
 
@@ -20,6 +20,7 @@ const PROVIDER_ALIAS_NAMES = {
   kr: "Kiro AI",
   oc: "OpenCode Free",
   opencode: "OpenCode Free",
+  zc: "ZCode",
   openrouter: "OpenRouter",
   glm: "GLM Coding",
   kimi: "Kimi Coding",
@@ -38,6 +39,7 @@ const PROVIDER_ID_TO_ALIAS = {
   iflow: "if",
   qwen: "qw",
   kiro: "kr",
+  zcode: "zc",
   cursor: "cu",
   cline: "cline",
   clinepass: "clinepass",
