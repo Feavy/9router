@@ -355,6 +355,9 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
+      } else if (provider === "zcode") {
+        // Upstream OAuth app only whitelists the ZCode desktop redirect; user pastes the callback URL
+        redirectUri = "zcode://oauth/callback";
       } else {
         redirectUri = `http://localhost:${appPort}/callback`;
       }
@@ -445,7 +448,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (!popupRef.current) {
           setStep("input");
         }
-      } else if (!isLocalhost || provider === "codex" || provider === "xai") {
+      } else if (!isLocalhost || provider === "codex" || provider === "xai" || provider === "zcode") {
         // Non-localhost or proxy failed: manual input mode
         setStep("input");
         window.open(data.authUrl, "_blank");
