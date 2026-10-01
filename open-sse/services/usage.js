@@ -49,8 +49,9 @@ const USAGE_HANDLERS = {
   ollama: (c) => getOllamaUsage(c.apiKey, c.providerSpecificData, c.proxyOptions),
   glm: (c) => getGlmUsage(c.apiKey, c.provider, c.proxyOptions),
   "glm-cn": (c) => getGlmUsage(c.apiKey, c.provider, c.proxyOptions),
-  // zcode OAuth connections store the coding-plan key on accessToken (no apiKey)
-  zcode: (c) => getZcodeUsage(c.apiKey || c.accessToken, c.proxyOptions),
+  // zcode usage needs the full connection: start-plan accounts read quota from
+  // the zcode-plan billing endpoint with the JWT, coding plans from the monitor.
+  zcode: (c) => getZcodeUsage(c, c.proxyOptions),
   minimax: (c) => getMiniMaxUsage(c.apiKey, c.provider, c.proxyOptions),
   "minimax-cn": (c) => getMiniMaxUsage(c.apiKey, c.provider, c.proxyOptions),
   "vercel-ai-gateway": (c) => getVercelAiGatewayUsage(c.apiKey, c.proxyOptions),

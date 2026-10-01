@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { ZCODE_CONFIG } from "../constants/oauth.js";
+import { ZCODE_CLI_VERSION, buildZcodeDeviceMid } from "open-sse/shared/zcodeSource.js";
 
 // ZCode (Z.ai) subscription OAuth — CLI polling flow (mirrors the official
 // ZCode CLI, apps/zcode-cli packages/adapters/src/auth/cli-oauth.ts +
@@ -130,10 +131,32 @@ const zcode = {
     // ready.accessToken is the Z.AI OAuth token — derive the coding-plan API key
     const { planApiKey, businessToken } = await resolveCodingPlanApiKey(config, zaiAccessToken);
 
+    // Detect the account's plan kind. Start Plan entitlements live on the
+    // zcode platform (billing/balance, JWT-authenticated) while individual/team
+    // coding plans surface through the derived coding-plan API key — and the
+    // official CLI routes each plan to a different gateway. When the check
+    // fails, default to the coding-plan key: the executor still self-heals by
+    // falling back between the two credential surfaces on auth errors.
+    const deviceMid = buildZcodeDeviceMid(data.user?.user_id || zaiAccessToken);
+    let planKind = "coding-plan";
+    let planToken = planApiKey;
+    try {
+      const plans = await fetchStartPlanBalance(config, data.token, deviceMid);
+      if (hasActiveStartPlan(plans)) {
+        planKind = "start-plan";
+        planToken = data.token;
+      }
+    } catch {
+      // Entitlement check is best-effort; routing falls back at request time.
+    }
+
     return {
       ok: true,
       data: {
-        access_token: planApiKey,
+        access_token: planToken,
+        _zcodePlanKind: planKind,
+        _zcodeCodingPlanApiKey: planApiKey,
+        _zcodeDeviceMid: deviceMid,
         _zcodeJwtToken: data.token || "",
         _zaiBusinessToken: businessToken,
         _zaiRefreshToken:
@@ -154,6 +177,9 @@ const zcode = {
         authMethod: "cli_poll",
         username: user.name || undefined,
         userId: user.user_id || undefined,
+        planKind: tokens._zcodePlanKind || undefined,
+        codingPlanApiKey: tokens._zcodeCodingPlanApiKey || undefined,
+        deviceMid: tokens._zcodeDeviceMid || undefined,
         zcodeJwtToken: tokens._zcodeJwtToken || undefined,
         zaiBusinessToken: tokens._zaiBusinessToken || undefined,
         ...(tokens._zaiRefreshToken ? { zaiRefreshToken: tokens._zaiRefreshToken } : {}),
@@ -161,6 +187,41 @@ const zcode = {
     };
   },
 };
+
+// Start Plan entitlement check — the authoritative availability source per the
+// official CLI (codingPlanProviderAvailability.ts): GET billing/balance with the
+// zcode JWT. Requires X-Device-Mid; without it the endpoint answers 3001.
+async function fetchStartPlanBalance(config, zcodeJwtToken, deviceMid) {
+  if (!zcodeJwtToken) throw new Error("zcode JWT missing for start-plan check");
+  const url = `${config.planBalanceUrl}?app_version=${ZCODE_CLI_VERSION}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${zcodeJwtToken}`,
+      "X-Device-Mid": deviceMid,
+      Accept: "application/json",
+    },
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Start plan balance request failed (HTTP ${response.status}): ${text.slice(0, 200)}`);
+  }
+  const payload = JSON.parse(text);
+  if (payload.success === false || (payload.code !== undefined && payload.code !== 0 && payload.code !== 200)) {
+    throw new Error(payload.msg || `Start plan balance error ${payload.code}`);
+  }
+  return Array.isArray(payload?.data?.plans) ? payload.data.plans : [];
+}
+
+// billing/balance plans may omit identity fields; an empty identity counts as a
+// match (mirrors hasActiveStartPlan in codingPlanProviderAvailability.ts).
+function hasActiveStartPlan(plans) {
+  return plans.some((plan) => {
+    const status = String(plan?.status || "").trim().toLowerCase();
+    const identity = `${plan?.plan_id || ""} ${plan?.name || ""}`.trim().toLowerCase();
+    const identityMatches = !identity || identity.includes("start-plan") || identity.includes("start plan");
+    return status === "active" && identityMatches;
+  });
+}
 
 // Business JWT → coding-plan API key ("apiKey.secretKey"). Mirrors ZCode CLI
 // coding-plan-api-key.ts: getCustomerInfo → default org/project → api_keys

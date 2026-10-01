@@ -1,11 +1,16 @@
 import { CLAUDE_API_HEADERS } from "../shared.js";
 
-// ZCode (Z.ai) OAuth subscription — GLM Coding Plan via the ZCode platform gateway.
-// OAuth login (Z.ai account) mints a coding-plan API key ("apiKey.secretKey") at
-// api.z.ai; model requests go through the ZCode platform gateway, which does the
-// plan entitlement check and forwards to the model service. Mirrors the official
-// ZCode CLI (apps/zcode-cli official-coding-plan-gateway):
-//   https://api.z.ai/api/anthropic/v1/messages → https://zcode.z.ai/api/v1/ultra-zai/anthropic/v1/messages
+// ZCode (Z.ai) OAuth subscription — GLM Coding Plan / Start Plan via the ZCode
+// platform gateway. OAuth login (Z.ai account) mints a coding-plan API key
+// ("apiKey.secretKey") at api.z.ai and a long-lived zcode platform JWT (the
+// OAuth ready payload "token"). Which credential authenticates a model request
+// depends on the account's plan, mirroring the official ZCode CLI:
+//   - Individual/Team Coding Plan: coding-plan API key via the official
+//     coding-plan gateway (apps/zcode-cli official-coding-plan-gateway):
+//       https://api.z.ai/api/anthropic/v1/messages → https://zcode.z.ai/api/v1/ultra-zai/anthropic/v1/messages
+//   - Start Plan: zcode JWT via the zcode-plan gateway (account:zai-start-plan
+//     provider rule in config/provider/zcode-builtin.json):
+//       https://zcode.z.ai/api/v1/zcode-plan/anthropic/v1/messages
 // Model ids are the ZCode plan canonical ids (capability whitelist is case-matched).
 export default {
   id: "zcode",
@@ -25,6 +30,8 @@ export default {
   hasOAuth: true,
   transport: {
     baseUrl: "https://zcode.z.ai/api/v1/ultra-zai/anthropic/v1/messages",
+    // Start Plan entitlements live on the zcode-plan surface (JWT-authenticated).
+    startPlanBaseUrl: "https://zcode.z.ai/api/v1/zcode-plan/anthropic/v1/messages",
     format: "claude",
     headers: { ...CLAUDE_API_HEADERS },
     auth: {
@@ -71,6 +78,10 @@ export default {
     // Business JWT → coding-plan API key ("zcode-api-key"."secretKey")
     apiBaseUrl: "https://api.z.ai",
     planApiKeyName: "zcode-api-key",
+    // Start Plan entitlement check — the authoritative source for start-plan
+    // availability (billing/current is deprecated upstream). Requires the
+    // X-Device-Mid header; without it the endpoint answers 3001 parameter error.
+    planBalanceUrl: "https://zcode.z.ai/api/v1/zcode-plan/billing/balance",
     // No refresh_token grant on the ZAI OAuth provider — the coding-plan API key
     // is long-lived; expiry/revocation means re-login (same as the official CLI).
   },

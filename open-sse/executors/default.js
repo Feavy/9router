@@ -1,5 +1,6 @@
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers.js";
+import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE, selectAnthropicBeta, mergeAnthropicBeta } from "../providers/shared.js";
 import { resolveOpenAICompatibleApiType } from "../services/provider.js";
 import { OAUTH_ENDPOINTS, buildKimiHeaders } from "../config/appConstants.js";
@@ -8,6 +9,7 @@ import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
 import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking.js";
+import { buildZcodeSourceHeaders, isZcodePlanRoute } from "../shared/zcodeSource.js";
 
 // Auth header descriptors — derived from registry transport.auth, fallback to hardcoded defaults.
 const BEARER = { combined: true, header: "Authorization", scheme: "bearer" };
@@ -47,6 +49,7 @@ const HEADER_HOOKS = {
   zcodeHeaders: (h, c) => {
     const token = c.apiKey || c.accessToken;
     if (token) h["Authorization"] = `Bearer ${token}`;
+    Object.assign(h, buildZcodeSourceHeaders());
   },
 };
 
@@ -71,6 +74,59 @@ const REFRESH_GRANTS = Object.fromEntries(
 export class DefaultExecutor extends BaseExecutor {
   constructor(provider) {
     super(provider, PROVIDERS[provider] || PROVIDERS.openai);
+  }
+
+  // ZCode plan routing — mirrors the official ZCode CLI credential resolution:
+  //   - Start Plan accounts authenticate with the zcode platform JWT against
+  //     the zcode-plan gateway.
+  //   - Individual/Team coding plans authenticate with the derived coding-plan
+  //     API key against the ultra-zai gateway.
+  // planKind is persisted at OAuth time; connections created before it existed
+  // route JWT-first and fall back to the API key on auth failure (self-healing).
+  zcodeRoutes(credentials) {
+    const psd = credentials?.providerSpecificData || {};
+    const jwt = psd.zcodeJwtToken || "";
+    const apiKey = credentials.apiKey || credentials.accessToken || "";
+    const coding = apiKey ? [{ url: this.config.baseUrl, token: apiKey }] : [];
+    if (!jwt) return coding;
+    const start = { url: this.config.startPlanBaseUrl, token: jwt };
+    if (psd.planKind === "start-plan") return [start];
+    if (psd.planKind === "coding-plan") return coding;
+    return [start, ...coding];
+  }
+
+  // ZCode can fall back between the plan routes (zcode-plan JWT ↔ ultra-zai key).
+  getFallbackCount() {
+    if (this.provider === "zcode") return 2;
+    return super.getFallbackCount();
+  }
+
+  // ZCode: only auth-class failures justify re-routing to the other credential
+  // surface — a 429 is a genuine plan rate limit, and 1113 "no resource package"
+  // on ultra-zai is the terminal state for accounts without a coding plan.
+  shouldRetry(status, urlIndex) {
+    if (this.provider === "zcode") {
+      return (status === HTTP_STATUS.UNAUTHORIZED || status === HTTP_STATUS.FORBIDDEN) && urlIndex === 0;
+    }
+    return super.shouldRetry(status, urlIndex);
+  }
+
+  // The Start Plan gateway only accepts the official ZCode agent's request
+  // shape and answers 3012 otherwise. Say so plainly instead of passing a bare
+  // business code back to the client.
+  parseError(response, bodyText) {
+    const parsed = super.parseError(response, bodyText);
+    if (this.provider !== "zcode") return parsed;
+    if (response.status === 405 && /"code"\s*:\s*"?3012"?/.test(bodyText || "")) {
+      return {
+        status: parsed.status,
+        message:
+          "ZCode Start Plan rejected this client (3012). The Start Plan endpoint only serves the " +
+          "official ZCode CLI/desktop agent. Use a Z.ai Coding Plan key on this connection, or " +
+          "run requests through the official ZCode app.",
+      };
+    }
+    return parsed;
   }
 
   transformRequest(model, body) {
@@ -112,6 +168,11 @@ export class DefaultExecutor extends BaseExecutor {
     const rt = credentials?.runtimeTransport;
     if (rt?.baseUrl) {
       return rt.urlSuffix ? `${rt.baseUrl}${rt.urlSuffix}` : rt.baseUrl;
+    }
+    // ZCode plan routing: urlIndex selects the plan route (see zcodeRoutes)
+    if (this.provider === "zcode") {
+      const routes = this.zcodeRoutes(credentials);
+      return (routes[urlIndex] || routes[0])?.url || this.config.baseUrl;
     }
     if (this.provider?.startsWith?.("openai-compatible-")) {
       const baseUrl = credentials?.providerSpecificData?.baseUrl || OPENAI_COMPAT_BASE;
@@ -159,6 +220,16 @@ export class DefaultExecutor extends BaseExecutor {
     // Hooks run BEFORE auth so dynamic overlays can't clobber the token.
     for (const hook of desc.hooks || []) HEADER_HOOKS[hook]?.(headers, credentials);
     applyAuth(headers, desc, credentials);
+
+    // ZCode start-plan route authenticates with the zcode platform JWT
+    // (x-api-key + Bearer), not the coding-plan API key.
+    if (this.provider === "zcode" && isZcodePlanRoute(url)) {
+      const jwt = credentials?.providerSpecificData?.zcodeJwtToken;
+      if (jwt) {
+        headers["x-api-key"] = jwt;
+        headers["Authorization"] = `Bearer ${jwt}`;
+      }
+    }
 
     // anthropic-compatible-* nodes serving a real Claude model sit in front of
     // Anthropic itself (a rotating multi-account proxy, a corporate gateway),
