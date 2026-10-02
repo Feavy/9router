@@ -9,7 +9,7 @@ import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
 import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking.js";
-import { buildZcodeSourceHeaders, isZcodePlanRoute } from "../shared/zcodeSource.js";
+import { buildZcodeSourceHeaders, isZcodePlanRoute, applyZcodePlanSystemPrompt } from "../shared/zcodeSource.js";
 
 // Auth header descriptors — derived from registry transport.auth, fallback to hardcoded defaults.
 const BEARER = { combined: true, header: "Authorization", scheme: "bearer" };
@@ -111,9 +111,10 @@ export class DefaultExecutor extends BaseExecutor {
     return super.shouldRetry(status, urlIndex);
   }
 
-  // The Start Plan gateway only accepts the official ZCode agent's request
-  // shape and answers 3012 otherwise. Say so plainly instead of passing a bare
-  // business code back to the client.
+  // The Start Plan gateway only accepts requests carrying the official ZCode
+  // agent's system prompt (see applyZcodePlanSystemPrompt — 9router injects it)
+  // and answers 3012 otherwise. If this still fires, upstream tightened the
+  // client fingerprint beyond the injected identity blocks.
   parseError(response, bodyText) {
     const parsed = super.parseError(response, bodyText);
     if (this.provider !== "zcode") return parsed;
@@ -121,15 +122,16 @@ export class DefaultExecutor extends BaseExecutor {
       return {
         status: parsed.status,
         message:
-          "ZCode Start Plan rejected this client (3012). The Start Plan endpoint only serves the " +
-          "official ZCode CLI/desktop agent. Use a Z.ai Coding Plan key on this connection, or " +
-          "run requests through the official ZCode app.",
+          "ZCode Start Plan rejected this client (3012). The endpoint fingerprints the official " +
+          "ZCode agent's system prompt; 9router prepends the ZCode identity blocks, so this " +
+          "likely means upstream changed the check. Re-run tests/manual/zcode-plan-probe.mjs " +
+          "to re-derive the required prompt.",
       };
     }
     return parsed;
   }
 
-  transformRequest(model, body) {
+  transformRequest(model, body, stream, credentials) {
     const transformed = this.applyJsonSchemaFallback(body);
 
     if (transformed && typeof transformed === "object") {
@@ -138,6 +140,15 @@ export class DefaultExecutor extends BaseExecutor {
         delete transformed.client_metadata;
       }
       stripUnsupportedParams(this.provider, model, transformed);
+    }
+
+    // The zcode-plan (Start Plan) gateway rejects requests whose system prompt
+    // doesn't carry the official ZCode agent identity (405 code 3012) — see
+    // applyZcodePlanSystemPrompt. Applies to every route a zcode JWT can take:
+    // when planKind is unknown the fallback loop reuses the same transformed
+    // body on ultra-zai, where the official CLI sends the same prompt anyway.
+    if (this.provider === "zcode" && credentials?.providerSpecificData?.zcodeJwtToken) {
+      applyZcodePlanSystemPrompt(transformed);
     }
 
     return injectReasoningContent({ provider: this.provider, model, body: transformed });
